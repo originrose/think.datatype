@@ -1,4 +1,4 @@
-(defproject thinktopic/think.datatype "0.3.3"
+(defproject thinktopic/think.datatype "0.3.4"
   :description "Library for efficient manipulation of contiguous mutable containers of primitive datatypes."
   :url "http://github.com/thinktopic/think.datatype"
   :license {:name "Eclipse Public License"
@@ -9,7 +9,8 @@
 
   :java-source-paths ["java"]
 
-  :aot [think.datatype.main]
-  :main think.datatype.main
+  ;;If you want to run perf tests
+;  :aot [think.datatype.main]
+;  :main think.datatype.main
 
   :think/meta {:type :library :tags [:low-level]})
