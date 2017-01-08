@@ -9,4 +9,7 @@
 
   :java-source-paths ["java"]
 
+  :aot [think.datatype.main]
+  :main think.datatype.main
+
   :think/meta {:type :library :tags [:low-level]})

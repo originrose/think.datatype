@@ -811,6 +811,17 @@ The function signature will be:
   ^long [item]
   (m/ecount item))
 
+
+(defmacro check-range
+  [item offset elem-count]
+  `(when-not (<= (+ ~offset ~elem-count)
+                 (ecount ~item))
+     (throw (ex-info (format "%s offset + n-elems > ecount range violation"
+                             ~(name item))
+                     {:offset ~offset
+                      :n-elems ~elem-count
+                      :length (ecount ~item)}))))
+
 (defn copy!
   "copy elem-count src items to dest items"
   ([src src-offset dest dest-offset elem-count]
@@ -819,6 +830,8 @@ The function signature will be:
          dest-dtype (get-datatype dest)
          dest-offset (long dest-offset)
          elem-count (long elem-count)]
+     (check-range src src-offset elem-count)
+     (check-range dest dest-offset elem-count)
      (if (and (= src-dtype dest-dtype))
        ((get-direct-copy-fn dest dest-offset) src src-offset elem-count)
        ((get-indirect-copy-fn dest dest-offset) src src-offset elem-count))
@@ -977,7 +990,15 @@ The function signature will be:
   "Indirect copy function where src and dest indexes are provided."
   ([src src-offset src-indexes dest dest-offset dest-indexes]
    (let [src-indexes (->int-buffer src-indexes)
-         dest-indexes (->int-buffer dest-indexes)]
+         dest-indexes (->int-buffer dest-indexes)
+         n-elems (alength src-indexes)
+         src-offset (long src-offset)
+         dest-offset (long dest-offset)]
+     (when-not (= (alength src-indexes)
+                  (alength dest-indexes))
+       (throw (ex-info "indexed-copy! src and dest index size mismatch"
+                       {:src-index-count (alength src-indexes)
+                        :dst-index-count (alength dest-indexes)})))
      ((marshal/get-indexed-copy-to-fn dest dest-offset)
       src src-offset src-indexes dest-indexes)))
   ([src src-indexes dest dest-indexes]
