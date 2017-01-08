@@ -27,7 +27,7 @@
 
 (defn indexed-copy-test
   [src-fn dest-fn]
-  (let [n-elems 10c0
+  (let [n-elems 100
         src-data (src-fn (range n-elems))
         src-indexes (range n-elems)
         dest-indexes (reverse (range n-elems))
