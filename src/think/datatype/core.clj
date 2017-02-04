@@ -91,15 +91,19 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (defn make-array-of-type
   [datatype elem-count-or-seq]
-  (cond
-    (= datatype :byte) (byte-array elem-count-or-seq)
-    (= datatype :short) (short-array elem-count-or-seq)
-    (= datatype :int) (int-array elem-count-or-seq)
-    (= datatype :long) (long-array elem-count-or-seq)
-    (= datatype :float) (float-array elem-count-or-seq)
-    (= datatype :double) (double-array elem-count-or-seq)
-    :else
-    (throw (Exception. (format "Unknown datatype in make-array-of-type")))))
+  (try
+    (cond
+      (= datatype :byte) (byte-array elem-count-or-seq)
+      (= datatype :short) (short-array elem-count-or-seq)
+      (= datatype :int) (int-array elem-count-or-seq)
+      (= datatype :long) (long-array elem-count-or-seq)
+      (= datatype :float) (float-array elem-count-or-seq)
+      (= datatype :double) (double-array elem-count-or-seq)
+      :else
+      (throw (Exception. (format "Unknown datatype in make-array-of-type"))))
+    (catch Throwable e
+      (println "Failed to make array of type:" datatype "with size:" elem-count-or-seq)
+      (throw e))))
 
 (defprotocol PBufferWrap ;;Conversion to nio buffer sharing underlying data
   (buffer-wrap-impl [item offset length]))
