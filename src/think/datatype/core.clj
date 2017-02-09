@@ -102,8 +102,10 @@ this involves a double-dispatch on both the src and dest arguments:
       :else
       (throw (Exception. (format "Unknown datatype in make-array-of-type"))))
     (catch Throwable e
-      (println "Failed to make array of type:" datatype "with size:" elem-count-or-seq)
-      (throw e))))
+      (throw (ex-info "make-array-of-type failed"
+                      {:datatype datatype
+                       :elem-count-or-seq elem-count-or-seq
+                       :error e})))))
 
 (defprotocol PBufferWrap ;;Conversion to nio buffer sharing underlying data
   (buffer-wrap-impl [item offset length]))
