@@ -6,8 +6,7 @@
   [item offset elem-count]
   `(when-not (<= (+ ~offset ~elem-count)
                  (m/ecount ~item))
-     (throw (ex-info (format "%s offset + n-elems > ecount range violation"
-                             ~(name item))
+     (throw (ex-info "offset + n-elems > ecount range violation"
                      {:offset ~offset
                       :n-elems ~elem-count
                       :length (m/ecount ~item)}))))
