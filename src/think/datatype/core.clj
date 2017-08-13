@@ -29,6 +29,8 @@ this involves a double-dispatch on both the src and dest arguments:
 
 
 (defn get-datatype [item] (base/get-datatype item))
+(defn make-array-of-type [datatype elem-count-or-seq] (base/make-array-of-type datatype
+                                                                               elem-count-or-seq))
 
 
 (extend-protocol base/PDatatype
