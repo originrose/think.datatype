@@ -28,9 +28,39 @@ this involves a double-dispatch on both the src and dest arguments:
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(defn get-datatype [item] (base/get-datatype item))
-(defn make-array-of-type [datatype elem-count-or-seq] (base/make-array-of-type datatype
-                                                                               elem-count-or-seq))
+(defn get-datatype
+  [item]
+  (base/get-datatype item))
+
+
+(defn make-array-of-type
+  [datatype elem-count-or-seq]
+  (base/make-array-of-type datatype elem-count-or-seq))
+
+
+(defn ecount
+  [item]
+  (base/ecount item))
+
+
+(defn ->view
+  [& args]
+  (apply base/->view args))
+
+
+(defn make-view
+  [datatype item-count-or-seq]
+  (base/make-view datatype item-count-or-seq))
+
+
+(defn copy!
+  [& args]
+  (apply base/copy! args))
+
+
+(defn generic-indexed-copy!
+  [& args]
+  (apply base/generic-indexed-copy! args))
 
 
 (extend-protocol base/PDatatype
@@ -78,11 +108,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (defprotocol PArrayInfo
   (is-primitive-array? [item]))
 
-(defprotocol PAccess
-  (set-value! [item offset value])
-  (set-constant! [item offset value elem-count])
-  (get-value [item offset]))
-
 (defprotocol PCopyToItemDirect
   "Fast paths for when the types match.  When they don't the slower
 get/set value path is used."
@@ -95,9 +120,6 @@ The function signature will be:
 (copy-fn! item item-offset elem-count)."
   (get-direct-copy-fn [dest dest-offset]))
 
-(defprotocol PCopyQueryIndirect
-  "Copy protocol when the types do not match"
-  (get-indirect-copy-fn [dest destoffset]))
 
 (defmacro copy-array-to-array-impl
   [item item-offset dest dest-offset elem-count]
@@ -137,25 +159,6 @@ The function signature will be:
                             elem-count#)))
 
 
-(defprotocol PView
-  (->view-impl [item offset elem-count]))
-
-
-(defn ->view
-  ([item ^long offset ^long elem-count]
-   (let [item-ecount (long (m/ecount item))]
-     (when-not (>= (- item-ecount offset) elem-count)
-       (throw (Exception. "View out of range")))
-     (->view-impl item offset elem-count)))
-  ([item]
-   (->view item 0 (m/ecount item))))
-
-
-(defn make-view
-  [datatype item-count-or-seq]
-  (->view (base/make-array-of-type datatype item-count-or-seq)))
-
-
 (extend-type ByteArrayView
   base/PDatatype
   (get-datatype [item] :byte)
@@ -166,10 +169,10 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl (.data dest) (+ (long dest-offset) (.offset dest))))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
-  PAccess
+  base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset)
                                                            (.offset item)) (byte value)))
   (set-constant! [item in-offset value elem-count]
@@ -178,7 +181,7 @@ The function signature will be:
   (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
   mp/PElementCount
   (element-count [item] (.length item))
-  PView
+  base/PView
   (->view-impl [item n-offset length] (ByteArrayView. (.data item)
                                                       (+ (.offset item) (long n-offset))
                                                       length)))
@@ -192,10 +195,10 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [item dest-offset]
     (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
-  PAccess
+  base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (short value)))
   (set-constant! [item in-offset value elem-count]
@@ -204,7 +207,7 @@ The function signature will be:
   (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
   mp/PElementCount
   (element-count [item] (.length item))
-  PView
+  base/PView
   (->view-impl [item n-offset length] (ShortArrayView. (.data item) (+ (.offset item)
                                                                        (long n-offset))
                                                        length)))
@@ -218,10 +221,10 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [item dest-offset]
     (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
-  PAccess
+  base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (int value)))
   (set-constant! [item in-offset value elem-count]
@@ -230,7 +233,7 @@ The function signature will be:
   (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
   mp/PElementCount
   (element-count [item] (.length item))
-  PView
+  base/PView
   (->view-impl [item n-offset length] (IntArrayView. (.data item) (+ (.offset item)
                                                                      (long n-offset)) length)))
 
@@ -243,10 +246,10 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [item dest-offset]
     (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
-  PAccess
+  base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (long value)))
   (set-constant! [item in-offset value elem-count]
@@ -255,7 +258,7 @@ The function signature will be:
   (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
   mp/PElementCount
   (element-count [item] (.length item))
-  PView
+  base/PView
   (->view-impl [item n-offset length] (LongArrayView. (.data item) (+ (.offset item)
                                                                       (long n-offset)) length)))
 
@@ -269,10 +272,10 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [item dest-offset]
     (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
-  PAccess
+  base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (float value)))
   (set-constant! [item in-offset value elem-count]
@@ -281,7 +284,7 @@ The function signature will be:
   (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
   mp/PElementCount
   (element-count [item] (.length item))
-  PView
+  base/PView
   (->view-impl [item n-offset length] (FloatArrayView. (.data item) (+ (.offset item)
                                                                        (long n-offset)) length)))
 
@@ -294,10 +297,10 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [item dest-offset]
     (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
-  PAccess
+  base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (double value)))
   (set-constant! [item in-offset value elem-count]
@@ -306,7 +309,7 @@ The function signature will be:
   (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
   mp/PElementCount
   (element-count [item] (.length item))
-  PView
+  base/PView
   (->view-impl [item n-offset n-length] (DoubleArrayView. (.data item) (+ (.offset item)
                                                                           (long n-offset))
                                                           n-length)))
@@ -338,10 +341,6 @@ The function signature will be:
   [array-view]
   `(.length ~array-view))
 
-
-(defprotocol PView
-  (->view-impl [item offset length]))
-
 (extend-type (Class/forName "[B")
   base/PDatatype
   (get-datatype [item] :byte)
@@ -352,7 +351,7 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
@@ -362,13 +361,13 @@ The function signature will be:
   (copy-to-buffer-direct! [item item-offset ^ByteBuffer dest dest-offset elem-count]
     (let [^bytes item item]
       (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (aset ^bytes item offset (byte value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^bytes item item]
       (set-array-constant-impl item offset value byte elem-count)))
   (get-value [item ^long offset] (aget ^bytes item offset))
-  PView
+  base/PView
   (->view-impl [item offset length] (ByteArrayView. item offset length)))
 
 (extend-type (Class/forName "[S")
@@ -381,7 +380,7 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
@@ -391,13 +390,13 @@ The function signature will be:
   (copy-to-buffer-direct! [item item-offset ^ShortBuffer dest dest-offset elem-count]
     (let [^shorts item item]
       (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (aset ^shorts item offset (short value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^shorts item item]
       (set-array-constant-impl item offset value short elem-count)))
   (get-value [item ^long offset] (aget ^shorts item offset))
-  PView
+  base/PView
   (->view-impl [item offset length] (ShortArrayView. item offset length)))
 
 (extend-type (Class/forName "[I")
@@ -410,7 +409,7 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
@@ -420,13 +419,13 @@ The function signature will be:
   (copy-to-buffer-direct! [item item-offset ^IntBuffer dest dest-offset elem-count]
     (let [^ints item item]
       (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (aset ^ints item offset (int value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^ints item item]
       (set-array-constant-impl item offset value int elem-count)))
   (get-value [item ^long offset] (aget ^ints item offset))
-  PView
+  base/PView
   (->view-impl [item offset length] (IntArrayView. item offset length)))
 
 (extend-type (Class/forName "[J")
@@ -439,7 +438,7 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
@@ -449,13 +448,13 @@ The function signature will be:
   (copy-to-buffer-direct! [item item-offset ^LongBuffer dest dest-offset elem-count]
     (let [^longs item item]
       (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (aset ^longs item offset (long value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^longs item item]
       (set-array-constant-impl item offset value long elem-count)))
   (get-value [item ^long offset] (aget ^longs item offset))
-  PView
+  base/PView
   (->view-impl [item offset length] (LongArrayView. item offset length)))
 
 (extend-type (Class/forName "[F")
@@ -468,7 +467,7 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
@@ -478,13 +477,13 @@ The function signature will be:
   (copy-to-buffer-direct! [item item-offset ^FloatBuffer dest dest-offset elem-count]
     (let [^floats item item]
       (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (aset ^floats item offset (float value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^floats item item]
       (set-array-constant-impl item offset value float elem-count)))
   (get-value [item ^long offset] (aget ^floats item offset))
-  PView
+  base/PView
   (->view-impl [item offset length] (FloatArrayView. item offset length)))
 
 (extend-type (Class/forName "[D")
@@ -497,7 +496,7 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
@@ -507,13 +506,13 @@ The function signature will be:
   (copy-to-buffer-direct! [item item-offset ^DoubleBuffer dest dest-offset elem-count]
     (let [^doubles item item]
       (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (aset ^doubles item offset (double value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^doubles item item]
       (set-array-constant-impl item offset value double elem-count)))
   (get-value [item ^long offset] (aget ^doubles item offset))
-  PView
+  base/PView
   (->view-impl [item offset length] (DoubleArrayView. item offset length)))
 
 (defn make-buffer
@@ -601,7 +600,7 @@ The function signature will be:
 
 
 (extend-type Buffer
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset)))
 
@@ -611,7 +610,7 @@ The function signature will be:
   (is-nio-buffer? [item] true)
   base/PDatatype
   (get-datatype [item] :byte)
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (.put ^ByteBuffer item offset (byte value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^ByteBuffer item item]
@@ -634,7 +633,7 @@ The function signature will be:
   (is-nio-buffer? [item] true)
   base/PDatatype
   (get-datatype [item] :short)
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (.put ^ShortBuffer item offset (short value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^ShortBuffer item item]
@@ -657,7 +656,7 @@ The function signature will be:
   (is-nio-buffer? [item] true)
   base/PDatatype
   (get-datatype [item] :int)
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (.put ^IntBuffer item offset (int value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^IntBuffer item item]
@@ -681,7 +680,7 @@ The function signature will be:
   (is-nio-buffer? [item] true)
   base/PDatatype
   (get-datatype [item] :long)
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (.put ^LongBuffer item offset (long value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^LongBuffer item item]
@@ -705,7 +704,7 @@ The function signature will be:
   (is-nio-buffer? [item] true)
   base/PDatatype
   (get-datatype [item] :float)
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (.put ^FloatBuffer item offset (float value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^FloatBuffer item item]
@@ -729,7 +728,7 @@ The function signature will be:
   (is-nio-buffer? [item] true)
   base/PDatatype
   (get-datatype [item] :double)
-  PAccess
+  base/PAccess
   (set-value! [item ^long offset value] (.put ^DoubleBuffer item offset (double value)))
   (set-constant! [item ^long offset value ^long elem-count]
     (let [^DoubleBuffer item item]
@@ -759,8 +758,8 @@ The function signature will be:
         dest-offset (long dest-offset)
         elem-count (long elem-count)]
     (c-for [idx 0 (< idx elem-count) (inc idx)]
-           (set-value! dest (+ dest-offset idx)
-                      (get-value item (+ item-offset idx))))
+           (base/set-value! dest (+ dest-offset idx)
+                            (base/get-value item (+ item-offset idx))))
     dest))
 
 
@@ -771,7 +770,7 @@ The function signature will be:
   (is-nio-buffer? [item] false)
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset] #(generic-copy! %1 %2 dest dest-offset %3))
-  PCopyQueryIndirect
+  base/PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset] #(generic-copy! %1 %2 dest dest-offset %3))
   PCopyToItemDirect
   (copy-to-array-direct! [item item-offset dest dest-offset elem-count]
@@ -780,50 +779,17 @@ The function signature will be:
     (generic-copy! item item-offset dest dest-offset elem-count)))
 
 
-(defn ecount
-  ^long [item]
-  (m/ecount item))
-
-
-(defmacro check-range
-  [item offset elem-count]
-  `(when-not (<= (+ ~offset ~elem-count)
-                 (ecount ~item))
-     (throw (ex-info (format "%s offset + n-elems > ecount range violation"
-                             ~(name item))
-                     {:offset ~offset
-                      :n-elems ~elem-count
-                      :length (ecount ~item)}))))
-
-(defn copy!
-  "copy elem-count src items to dest items"
-  ([src src-offset dest dest-offset elem-count]
-   (let [src-dtype (get-datatype src)
-         src-offset (long src-offset)
-         dest-dtype (get-datatype dest)
-         dest-offset (long dest-offset)
-         elem-count (long elem-count)]
-     (check-range src src-offset elem-count)
-     (check-range dest dest-offset elem-count)
-     (if (and (= src-dtype dest-dtype))
-       ((get-direct-copy-fn dest dest-offset) src src-offset elem-count)
-       ((get-indirect-copy-fn dest dest-offset) src src-offset elem-count))
-     dest))
-  ([src dest]
-   (copy! src 0 dest 0 (min (ecount dest) (ecount src)))))
-
-
 (defn copy->array
   ([src src-offset elem-count]
    (let [retval (base/make-array-of-type (get-datatype src) elem-count)]
-     (copy! src src-offset retval 0 elem-count)))
+     (base/copy! src src-offset retval 0 elem-count)))
   ([src]
-   (copy->array src 0 (ecount src))))
+   (copy->array src 0 (m/ecount src))))
 
 (defn copy->buffer
   ([src src-offset elem-count]
    (let [retval (make-buffer (get-datatype src) (m/ecount src))]
-     (copy! src src-offset retval 0 elem-count)))
+     (base/copy! src src-offset retval 0 elem-count)))
   ([src]
    (copy->buffer src 0 (ecount src))))
 
@@ -842,14 +808,14 @@ The function signature will be:
 
 (defn- raw-dtype-copy!
   [raw-data ary-target ^long target-offset]
-  (copy! raw-data 0 ary-target target-offset (ecount raw-data))
+  (base/copy! raw-data 0 ary-target target-offset (ecount raw-data))
   [ary-target (+ target-offset ^long (ecount raw-data))])
 
 
 (extend-protocol PCopyRawDataToArray
   Number
   (copy-raw->item! [raw-data ary-target ^long target-offset]
-    (set-value! ary-target target-offset raw-data)
+    (base/set-value! ary-target target-offset raw-data)
     [ary-target (+ target-offset 1)])
   clojure.lang.PersistentVector
   (copy-raw->item! [raw-data ary-target ^long target-offset]
@@ -859,7 +825,7 @@ The function signature will be:
        (if (number? (raw-data 0))
          (do
           (c-for [idx 0 (< idx num-elems) (inc idx)]
-                 (set-value! ary-target (+ idx target-offset) (raw-data idx)))
+                 (base/set-value! ary-target (+ idx target-offset) (raw-data idx)))
           [ary-target (+ target-offset num-elems)])
          (copy-raw-seq->item! raw-data ary-target target-offset)))))
   clojure.lang.ISeq
@@ -911,19 +877,6 @@ The function signature will be:
     (raw-dtype-copy! raw-data ary-target target-offset)))
 
 
-(defn generic-indexed-copy!
-  [src src-offset ^ints src-indexes dest dest-offset ^ints dest-indexes n-elems-per-idx]
-  (let [elem-count (alength src-indexes)
-        src-offset (long src-offset)
-        dest-offset (long dest-offset)
-        n-elems-per-idx (long n-elems-per-idx)]
-    (if (= 1 n-elems-per-idx)
-      (c-for [idx 0 (< idx elem-count) (inc idx)]
-             (set-value! dest (+ dest-offset (aget dest-indexes idx))
-                         (get-value src (+ src-offset (aget src-indexes idx))))))
-    dest))
-
-
 ;;Add the overloads for object for marshal-type copies.
 (defmacro generic-copy-impl
   [dest-type cast-type-fn copy-to-dest-fn cast-fn]
@@ -932,7 +885,7 @@ The function signature will be:
 
 (defmacro generic-indexed-copy-impl
   [dest-type cast-type-fn copy-to-dest-fn cast-fn]
-  `[(keyword (name ~copy-to-dest-fn)) generic-indexed-copy!])
+  `[(keyword (name ~copy-to-dest-fn)) base/generic-indexed-copy!])
 
 
 (extend Object
@@ -944,7 +897,7 @@ The function signature will be:
        (into {}))
   marshal/PIndexedTypeToCopyToFn
   {:get-indexed-copy-to-fn (fn [dest dest-offset]
-                             #(generic-indexed-copy! %1 %2 %3 dest dest-offset %4))}
+                             #(base/generic-indexed-copy! %1 %2 %3 dest dest-offset %4))}
   marshal/PIndexedCopyToArray
   (->> (marshal/indexed-array-type-iterator generic-indexed-copy-impl)
        (into {}))
@@ -979,9 +932,9 @@ The function signature will be:
        ((marshal/get-indexed-copy-to-fn dest dest-offset)
         src src-offset src-indexes dest-indexes)
        (c-for [idx 0 (< idx n-elems) (inc idx)]
-              (copy! src (+ src-offset (* (aget src-indexes idx) n-elems-per-idx))
-                     dest (+ dest-offset (* (aget dest-indexes idx) n-elems-per-idx))
-                     n-elems-per-idx)))))
+              (base/copy! src (+ src-offset (* (aget src-indexes idx) n-elems-per-idx))
+                          dest (+ dest-offset (* (aget dest-indexes idx) n-elems-per-idx))
+                          n-elems-per-idx)))))
   ([src src-indexes src-offset dest dest-indexes dest-offset]
    (indexed-copy! src src-indexes src-offset dest dest-indexes dest-offset 1))
   ([src src-indexes dest dest-indexes]

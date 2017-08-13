@@ -1,12 +1,5 @@
-(ns think.datatype.base-macros
+(ns think.datatype.shared-macros
   (:require [clojure.core.matrix :as m]))
-
-(defmacro try-catch-any
-  [try-body & catch-body]
-  `(try
-     ~try-body
-     (catch Throwable ~(first catch-body)
-       ~@(rest catch-body))))
 
 
 (defmacro check-range

@@ -5,7 +5,8 @@
             [reagent.core :refer [atom]]
             [think.gate.core :as gate]
             [think.gate.model :as model]
-            [think.datatype.base :as dt-base]))
+            [think.datatype.base :as dt-base]
+            [goog.crypt :as c]))
 
 (enable-console-print!)
 
@@ -15,11 +16,15 @@
   []
   (with-out-str
     (try
-      (let [data (dt-base/make-array-of-type :byte [1 2 3 4 5])]
+      (let [data (dt-base/make-array-of-type :byte [1 2 3 4 5])
+            def-data (c/stringToUtf8ByteArray [1 2 3 4 5])]
         (println {:array-type (str (type data))
-                  :array-value (str data)}))
+                  :array-value (str data)
+                  :default-type (str (type def-data))
+                  :default-value (str def-data)}))
     (catch :default exception
-      (println "Exception!!" exception)))))
+      (println "Exception!!" exception)
+      (throw e)))))
 
 (defmethod gate/component "default"
   [& args]
