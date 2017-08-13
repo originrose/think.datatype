@@ -16,7 +16,8 @@ this involves a double-dispatch on both the src and dest arguments:
   (:require [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix :as m]
-            [think.datatype.marshal :as marshal])
+            [think.datatype.marshal :as marshal]
+            [think.datatype.base :as base])
   (:import [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer Buffer]
            [mikera.arrayz INDArray]
@@ -26,32 +27,11 @@ this involves a double-dispatch on both the src and dest arguments:
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
-(def datatypes
-  [:byte
-   :short
-   :int
-   :long
-   :float
-   :double])
 
-(def datatype-sizes
-  [1
-   2
-   4
-   8
-   4
-   8])
+(defn get-datatype [item] (base/get-datatype item))
 
-(def datatype-size-map
-  (into {} (map vec (partition 2 (interleave datatypes datatype-sizes)))))
 
-(defn datatype->byte-size
-  ^long [datatype] (get datatype-size-map datatype))
-
-(defprotocol PDatatype
-  (get-datatype [item]))
-
-(extend-protocol PDatatype
+(extend-protocol base/PDatatype
   ByteBuffer
   (get-datatype [item] :byte)
   ShortBuffer
@@ -89,23 +69,6 @@ this involves a double-dispatch on both the src and dest arguments:
   [datatype]
   (get datatype->primitive-type-map datatype))
 
-(defn make-array-of-type
-  [datatype elem-count-or-seq]
-  (try
-    (cond
-      (= datatype :byte) (byte-array elem-count-or-seq)
-      (= datatype :short) (short-array elem-count-or-seq)
-      (= datatype :int) (int-array elem-count-or-seq)
-      (= datatype :long) (long-array elem-count-or-seq)
-      (= datatype :float) (float-array elem-count-or-seq)
-      (= datatype :double) (double-array elem-count-or-seq)
-      :else
-      (throw (Exception. (format "Unknown datatype in make-array-of-type"))))
-    (catch Throwable e
-      (throw (ex-info "make-array-of-type failed"
-                      {:datatype datatype
-                       :elem-count-or-seq elem-count-or-seq
-                       :error e})))))
 
 (defprotocol PBufferWrap ;;Conversion to nio buffer sharing underlying data
   (buffer-wrap-impl [item offset length]))
@@ -188,11 +151,11 @@ The function signature will be:
 
 (defn make-view
   [datatype item-count-or-seq]
-  (->view (make-array-of-type datatype item-count-or-seq)))
+  (->view (base/make-array-of-type datatype item-count-or-seq)))
 
 
 (extend-type ByteArrayView
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :byte)
   PBufferWrap
   (buffer-wrap-impl [item n-offset n-length] (ByteBuffer/wrap (.data item)
@@ -219,7 +182,7 @@ The function signature will be:
                                                       length)))
 
 (extend-type ShortArrayView
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :short)
   PBufferWrap
   (buffer-wrap-impl [item n-offset len] (ShortBuffer/wrap (.data item) (+ (.offset item)
@@ -245,7 +208,7 @@ The function signature will be:
                                                        length)))
 
 (extend-type IntArrayView
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :int)
   PBufferWrap
   (buffer-wrap-impl [item n-offset len] (IntBuffer/wrap (.data item) (+ (long n-offset)
@@ -270,7 +233,7 @@ The function signature will be:
                                                                      (long n-offset)) length)))
 
 (extend-type LongArrayView
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :long)
   PBufferWrap
   (buffer-wrap-impl [item n-offset len] (LongBuffer/wrap (.data item) (+ (.offset item)
@@ -295,7 +258,7 @@ The function signature will be:
                                                                       (long n-offset)) length)))
 
 (extend-type FloatArrayView
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :float)
   PBufferWrap
   (buffer-wrap-impl [item n-offset len] (FloatBuffer/wrap (.data item) (+ (.offset item)
@@ -321,7 +284,7 @@ The function signature will be:
                                                                        (long n-offset)) length)))
 
 (extend-type DoubleArrayView
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :double)
   PBufferWrap
   (buffer-wrap-impl [item n-offset len] (DoubleBuffer/wrap (.data item) (+ (long n-offset)
@@ -378,7 +341,7 @@ The function signature will be:
   (->view-impl [item offset length]))
 
 (extend-type (Class/forName "[B")
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :byte)
   PBufferWrap
   (buffer-wrap-impl [ary offset len] (ByteBuffer/wrap ^bytes ary (int offset) (int len)))
@@ -407,7 +370,7 @@ The function signature will be:
   (->view-impl [item offset length] (ByteArrayView. item offset length)))
 
 (extend-type (Class/forName "[S")
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :short)
   PBufferWrap
   (buffer-wrap-impl [ary offset len] (ShortBuffer/wrap ^shorts ary (int offset) (int len)))
@@ -436,7 +399,7 @@ The function signature will be:
   (->view-impl [item offset length] (ShortArrayView. item offset length)))
 
 (extend-type (Class/forName "[I")
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :int)
   PBufferWrap
   (buffer-wrap-impl [ary offset len] (IntBuffer/wrap ^ints ary (int offset) (int len)))
@@ -465,7 +428,7 @@ The function signature will be:
   (->view-impl [item offset length] (IntArrayView. item offset length)))
 
 (extend-type (Class/forName "[J")
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :long)
   PBufferWrap
   (buffer-wrap-impl [ary] (LongBuffer/wrap ^long ary))
@@ -494,7 +457,7 @@ The function signature will be:
   (->view-impl [item offset length] (LongArrayView. item offset length)))
 
 (extend-type (Class/forName "[F")
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :float)
   PBufferWrap
   (buffer-wrap-impl [ary offset len] (FloatBuffer/wrap ^floats ary (int offset) (int len)))
@@ -523,7 +486,7 @@ The function signature will be:
   (->view-impl [item offset length] (FloatArrayView. item offset length)))
 
 (extend-type (Class/forName "[D")
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :double)
   PBufferWrap
   (buffer-wrap-impl [ary offset len] (DoubleBuffer/wrap ^doubles ary (int offset) (int len)))
@@ -553,7 +516,7 @@ The function signature will be:
 
 (defn make-buffer
   ([datatype elem-count-or-seq]
-   (let [retval-ary (make-array-of-type datatype elem-count-or-seq)]
+   (let [retval-ary (base/make-array-of-type datatype elem-count-or-seq)]
     (buffer-wrap-impl retval-ary 0 (m/ecount retval-ary)))))
 
 (defn datatype->cast-fn
@@ -644,7 +607,7 @@ The function signature will be:
 (extend-type ByteBuffer
   PBufferInfo
   (is-nio-buffer? [item] true)
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :byte)
   PAccess
   (set-value! [item ^long offset value] (.put ^ByteBuffer item offset (byte value)))
@@ -667,7 +630,7 @@ The function signature will be:
 (extend-type ShortBuffer
   PBufferInfo
   (is-nio-buffer? [item] true)
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :short)
   PAccess
   (set-value! [item ^long offset value] (.put ^ShortBuffer item offset (short value)))
@@ -690,7 +653,7 @@ The function signature will be:
 (extend-type IntBuffer
   PBufferInfo
   (is-nio-buffer? [item] true)
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :int)
   PAccess
   (set-value! [item ^long offset value] (.put ^IntBuffer item offset (int value)))
@@ -714,7 +677,7 @@ The function signature will be:
 (extend-type LongBuffer
   PBufferInfo
   (is-nio-buffer? [item] true)
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :long)
   PAccess
   (set-value! [item ^long offset value] (.put ^LongBuffer item offset (long value)))
@@ -738,7 +701,7 @@ The function signature will be:
 (extend-type FloatBuffer
   PBufferInfo
   (is-nio-buffer? [item] true)
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :float)
   PAccess
   (set-value! [item ^long offset value] (.put ^FloatBuffer item offset (float value)))
@@ -762,7 +725,7 @@ The function signature will be:
 (extend-type DoubleBuffer
   PBufferInfo
   (is-nio-buffer? [item] true)
-  PDatatype
+  base/PDatatype
   (get-datatype [item] :double)
   PAccess
   (set-value! [item ^long offset value] (.put ^DoubleBuffer item offset (double value)))
@@ -850,7 +813,7 @@ The function signature will be:
 
 (defn copy->array
   ([src src-offset elem-count]
-   (let [retval (make-array-of-type (get-datatype src) elem-count)]
+   (let [retval (base/make-array-of-type (get-datatype src) elem-count)]
      (copy! src src-offset retval 0 elem-count)))
   ([src]
    (copy->array src 0 (ecount src))))
@@ -1011,12 +974,12 @@ The function signature will be:
                        {:src-index-count (alength src-indexes)
                         :dst-index-count (alength dest-indexes)})))
      (if (= 1 n-elems-per-idx)
-      ((marshal/get-indexed-copy-to-fn dest dest-offset)
-       src src-offset src-indexes dest-indexes)
-      (c-for [idx 0 (< idx n-elems) (inc idx)]
-             (copy! src (+ src-offset (* (aget src-indexes idx) n-elems-per-idx))
-                    dest (+ dest-offset (* (aget dest-indexes idx) n-elems-per-idx))
-                    n-elems-per-idx)))))
+       ((marshal/get-indexed-copy-to-fn dest dest-offset)
+        src src-offset src-indexes dest-indexes)
+       (c-for [idx 0 (< idx n-elems) (inc idx)]
+              (copy! src (+ src-offset (* (aget src-indexes idx) n-elems-per-idx))
+                     dest (+ dest-offset (* (aget dest-indexes idx) n-elems-per-idx))
+                     n-elems-per-idx)))))
   ([src src-indexes src-offset dest dest-indexes dest-offset]
    (indexed-copy! src src-indexes src-offset dest dest-indexes dest-offset 1))
   ([src src-indexes dest dest-indexes]
