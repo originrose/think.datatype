@@ -37,6 +37,11 @@ Contains:
 (defprotocol PDatatype
   (get-datatype [item]))
 
+(defn ecount
+  ^long [item]
+  (m/ecount item))
+
+
 #?(:cljs
    (do
     (defn- alloc-buffer
@@ -118,6 +123,50 @@ Contains:
   (get-value [item offset]))
 
 
+(defprotocol PCopyQuery
+  "Copy protocol when the types do not match"
+  (get-copy-fn [dest destoffset]))
+
+
+(defn copy!
+  "copy elem-count src items to dest items"
+  ([src src-offset dest dest-offset elem-count]
+   (let [src-dtype (get-datatype src)
+         src-offset (long src-offset)
+         dest-dtype (get-datatype dest)
+         dest-offset (long dest-offset)
+         elem-count (long elem-count)]
+     (shared-macros/check-range src src-offset elem-count)
+     (shared-macros/check-range dest dest-offset elem-count)
+     ((get-copy-fn dest dest-offset) src src-offset elem-count)
+     dest))
+  ([src dest]
+   (copy! src 0 dest 0 (min (ecount dest) (ecount src)))))
+
+
+(def ^:dynamic *error-on-slow-path* false)
+
+
+(defn generic-copy!
+  [item item-offset dest dest-offset elem-count]
+  (when *error-on-slow-path*
+    (throw (ex-info "should not hit slow path"
+                    {:src-type (type item)
+                     :dest-type (type dest)})))
+  (let [item-offset (long item-offset)
+        dest-offset (long dest-offset)
+        elem-count (long elem-count)]
+    (c-for [idx 0 (< idx elem-count) (inc idx)]
+           (set-value! dest (+ dest-offset idx)
+                       (get-value item (+ item-offset idx))))
+    dest))
+
+
+(extend-type Object
+  PCopyQuery
+  (get-copy-fn [dest dest-offset] #(generic-copy! %1 %2 dest dest-offset %3)))
+
+
 (defprotocol PView
   (->view-impl [item offset elem-count]))
 
@@ -138,40 +187,43 @@ Contains:
   (->view (make-array-of-type datatype item-count-or-seq)))
 
 
-(defn generic-indexed-copy!
-  [src src-offset ^ints src-indexes dest dest-offset ^ints dest-indexes n-elems-per-idx]
-  (let [elem-count (alength src-indexes)
-        src-offset (long src-offset)
-        dest-offset (long dest-offset)
-        n-elems-per-idx (long n-elems-per-idx)]
-    (if (= 1 n-elems-per-idx)
-      (c-for [idx 0 (< idx elem-count) (inc idx)]
-             (set-value! dest (+ dest-offset (aget dest-indexes idx))
-                         (get-value src (+ src-offset (aget src-indexes idx))))))
-    dest))
+(defprotocol PCopyRawData
+  "Given a sequence of data copy it as fast as possible into a target item."
+  (copy-raw->item! [raw-data ary-target target-offset]))
 
 
-(defn ecount
-  ^long [item]
-  (m/ecount item))
+(defn copy-raw-seq->item!
+  [raw-data-seq ary-target target-offset]
+  (reduce (fn [[ary-target target-offset] new-raw-data]
+            (copy-raw->item! new-raw-data ary-target target-offset))
+          [ary-target target-offset]
+          raw-data-seq))
 
 
-(defprotocol PCopyQueryIndirect
-  "Copy protocol when the types do not match"
-  (get-indirect-copy-fn [dest destoffset]))
+(extend-protocol PCopyRawData
+  Number
+  (copy-raw->item! [raw-data ary-target ^long target-offset]
+    (set-value! ary-target target-offset raw-data)
+    [ary-target (+ target-offset 1)])
+
+  clojure.lang.PersistentVector
+  (copy-raw->item! [raw-data ary-target ^long target-offset]
+    (let [num-elems (count raw-data)]
+     (if (= 0 num-elems)
+       [ary-target target-offset]
+       (if (number? (raw-data 0))
+         (do
+          (c-for [idx 0 (< idx num-elems) (inc idx)]
+                 (set-value! ary-target (+ idx target-offset) (raw-data idx)))
+          [ary-target (+ target-offset num-elems)])
+         (copy-raw-seq->item! raw-data ary-target target-offset)))))
+
+  clojure.lang.ISeq
+  (copy-raw->item! [raw-data ary-target target-offset]
+    (copy-raw-seq->item! raw-data ary-target target-offset)))
 
 
-(defn copy!
-  "copy elem-count src items to dest items"
-  ([src src-offset dest dest-offset elem-count]
-   (let [src-dtype (get-datatype src)
-         src-offset (long src-offset)
-         dest-dtype (get-datatype dest)
-         dest-offset (long dest-offset)
-         elem-count (long elem-count)]
-     (shared-macros/check-range src src-offset elem-count)
-     (shared-macros/check-range dest dest-offset elem-count)
-     ((get-indirect-copy-fn dest dest-offset) src src-offset elem-count)
-     dest))
-  ([src dest]
-   (copy! src 0 dest 0 (min (ecount dest) (ecount src)))))
+(defn raw-dtype-copy!
+  [raw-data ary-target ^long target-offset]
+  (copy! raw-data 0 ary-target target-offset (ecount raw-data))
+  [ary-target (+ target-offset ^long (ecount raw-data))])
