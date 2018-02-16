@@ -1,15 +1,15 @@
-(ns think.datatype.base
+(ns tech.datatype.base
   "Datatype library primitives shared between clojurescript and clojure.
 Contains:
  - base protocols
   - functions that operate purely at the protocol level."
   (:require [clojure.core.matrix :as m])
-  #?(:clj (:require [think.datatype.base-macros :as base-macros]
+  #?(:clj (:require [tech.datatype.base-macros :as base-macros]
                     [clojure.core.matrix.macros :refer [c-for]]
-                    [think.datatype.shared-macros :as shared-macros])
-     :cljs (:require-macros [think.datatype.base-macros :as base-macros]
+                    [tech.datatype.shared-macros :as shared-macros])
+     :cljs (:require-macros [tech.datatype.base-macros :as base-macros]
                             [clojure.core.matrix.macros :refer [c-for]]
-                            [think.datatype.shared-macros :as shared-macros])))
+                            [tech.datatype.shared-macros :as shared-macros])))
 
 
 (def datatypes
@@ -160,11 +160,6 @@ Contains:
            (set-value! dest (+ dest-offset idx)
                        (get-value item (+ item-offset idx))))
     dest))
-
-
-(extend-type Object
-  PCopyQuery
-  (get-copy-fn [dest dest-offset] #(generic-copy! %1 %2 dest dest-offset %3)))
 
 
 (defprotocol PView
